@@ -75,6 +75,23 @@ fun PermissionScreen() {
         )
     }
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var currentSong by remember { mutableStateOf<Song?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+
+    val player = remember { ExoPlayer.Builder(context).build() }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -89,7 +106,20 @@ fun PermissionScreen() {
     }
 
     if (hasPermission) {
-        SongList(songs)
+        SongList(
+            songs = songs,
+            currentSong = currentSong,
+            isPlaying = isPlaying,
+            onSongClick = { song ->
+                currentSong = song
+                player.setMediaItem(MediaItem.fromUri(song.contentUri))
+                player.prepare()
+                player.play()
+            },
+            onPlayPause = {
+                if (player.isPlaying) player.pause() else player.play()
+            }
+        )
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -106,21 +136,52 @@ fun PermissionScreen() {
 }
 
 @Composable
-fun SongList(songs: List<Song>) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)
-    ) {
-        item {
-            Text(
-                "${songs.size} songs found",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+fun SongList(
+    songs: List<Song>,
+    currentSong: Song?,
+    isPlaying: Boolean,
+    onSongClick: (Song) -> Unit,
+    onPlayPause: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
+        ) {
+            item {
+                Text(
+                    "${songs.size} songs found",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            items(songs) { song ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSongClick(song) }
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(song.title, style = MaterialTheme.typography.bodyLarge)
+                    Text(song.artist, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
-        items(songs) { song ->
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(song.title, style = MaterialTheme.typography.bodyLarge)
-                Text(song.artist, style = MaterialTheme.typography.bodySmall)
+
+        if (currentSong != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(currentSong.title, style = MaterialTheme.typography.bodyLarge)
+                    Text(currentSong.artist, style = MaterialTheme.typography.bodySmall)
+                }
+                Button(onClick = onPlayPause) {
+                    Text(if (isPlaying) "Pause" else "Play")
+                }
             }
         }
     }
