@@ -1,5 +1,8 @@
 package com.laura.diariosonoro
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableLongStateOf
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
