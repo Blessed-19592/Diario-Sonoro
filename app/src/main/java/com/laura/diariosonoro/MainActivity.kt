@@ -80,6 +80,8 @@ fun PermissionScreen() {
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
     var currentSong by remember { mutableStateOf<Song?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+    var position by remember { mutableLongStateOf(0L) }
+    var showPlayer by remember { mutableStateOf(false) }
 
     val player = remember { ExoPlayer.Builder(context).build() }
 
@@ -88,11 +90,23 @@ fun PermissionScreen() {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
             }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                currentSong = songs.getOrNull(player.currentMediaItemIndex)
+            }
         }
         player.addListener(listener)
         onDispose {
             player.removeListener(listener)
             player.release()
+        }
+    }
+
+    LaunchedEffect(isPlaying) {
+        position = player.currentPosition
+        while (isPlaying) {
+            position = player.currentPosition
+            delay(500)
         }
     }
 
@@ -108,21 +122,44 @@ fun PermissionScreen() {
         }
     }
 
+    val nowPlaying = currentSong
+
     if (hasPermission) {
-        SongList(
-            songs = songs,
-            currentSong = currentSong,
-            isPlaying = isPlaying,
-            onSongClick = { song ->
-                currentSong = song
-                player.setMediaItem(MediaItem.fromUri(song.contentUri))
-                player.prepare()
-                player.play()
-            },
-            onPlayPause = {
-                if (player.isPlaying) player.pause() else player.play()
-            }
-        )
+        if (showPlayer && nowPlaying != null) {
+            BackHandler { showPlayer = false }
+            NowPlayingScreen(
+                song = nowPlaying,
+                isPlaying = isPlaying,
+                position = position,
+                onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
+                onNext = { player.seekToNextMediaItem() },
+                onPrevious = { player.seekToPreviousMediaItem() },
+                onSeek = { newPosition ->
+                    player.seekTo(newPosition)
+                    position = newPosition
+                },
+                onClose = { showPlayer = false }
+            )
+        } else {
+            SongList(
+                songs = songs,
+                currentSong = currentSong,
+                isPlaying = isPlaying,
+                onSongClick = { song ->
+                    val index = songs.indexOf(song)
+                    player.setMediaItems(
+                        songs.map { MediaItem.fromUri(it.contentUri) },
+                        index,
+                        0L
+                    )
+                    player.prepare()
+                    player.play()
+                    currentSong = song
+                },
+                onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
+                onBarClick = { showPlayer = true }
+            )
+        }
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -137,14 +174,14 @@ fun PermissionScreen() {
         }
     }
 }
-
 @Composable
 fun SongList(
     songs: List<Song>,
     currentSong: Song?,
     isPlaying: Boolean,
     onSongClick: (Song) -> Unit,
-    onPlayPause: () -> Unit
+    onPlayPause: () -> Unit,
+    onBarClick: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         LazyColumn(
@@ -174,6 +211,7 @@ fun SongList(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable { onBarClick() }
                     .navigationBarsPadding()
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
