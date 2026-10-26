@@ -66,6 +66,7 @@ fun PermissionScreen() {
                     PackageManager.PERMISSION_GRANTED
         )
     }
+    var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -73,18 +74,45 @@ fun PermissionScreen() {
         hasPermission = granted
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    LaunchedEffect(hasPermission) {
         if (hasPermission) {
-            Text("Access granted. Ready to scan your songs!")
-        } else {
+            songs = withContext(Dispatchers.IO) { loadSongs(context) }
+        }
+    }
+
+    if (hasPermission) {
+        SongList(songs)
+    } else {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text("Diario Sonoro needs access to the music on your phone.")
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { launcher.launch(audioPermission) }) {
                 Text("Allow access")
+            }
+        }
+    }
+}
+
+@Composable
+fun SongList(songs: List<Song>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)
+    ) {
+        item {
+            Text(
+                "${songs.size} songs found",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+        items(songs) { song ->
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                Text(song.title, style = MaterialTheme.typography.bodyLarge)
+                Text(song.artist, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
